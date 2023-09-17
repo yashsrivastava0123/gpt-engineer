@@ -65,49 +65,78 @@ def simple_gen(ai: AI, dbs: DBs) -> List[Message]:
     to_files(messages[-1].content.strip(), dbs.workspace)
     return messages
 
+def get_prompt(dbs: DBs) -> str:
+    """While we migrate we have this fallback getter"""
+    assert (
+        "prompt" in dbs.input or "main_prompt" in dbs.input
+    ), "Please put your prompt in the file `prompt` in the project directory"
+
+    if "prompt" not in dbs.input:
+        print(
+            colored("Please put the prompt in the file `prompt`, not `main_prompt", "red")
+        )
+        print()
+        return dbs.input["main_prompt"]
+
+    return dbs.input["prompt"]
 
 def clarify(ai: AI, dbs: DBs) -> List[Message]:
     """
     Ask the user if they want to clarify anything and save the results to the workspace
     """
-    messages: List[Message] = [ai.fsystem(dbs.preprompts["clarify"])]
-    user_input = dbs.input["prompt"]
-    while True:
-        messages = ai.next(messages, user_input, step_name=curr_fn())
-        msg = messages[-1].content.strip()
+    messages = None
+    user_input = None
 
-        if msg == "Nothing more to clarify.":
-            break
+    if 'clarify' not in dbs.logs:
+        messages: List[Message] = [ai.fsystem(dbs.preprompts["clarify"])]
+        user_input = get_prompt(dbs)
+    else:
+        messages: List[Message] = AI.deserialize_messages(dbs.logs["clarify"])
+        user_input = messages[-1].content.strip()
+        messages = messages[:-1]
 
-        if msg.lower().startswith("no"):
-            print("Nothing more to clarify.")
-            break
+    messages = ai.next(messages, user_input, step_name=curr_fn())
 
-        print()
-        user_input = input('(answer in text, or "c" to move on)\n')
-        print()
-
-        if not user_input or user_input == "c":
-            print("(letting gpt-engineer make its own assumptions)")
-            print()
-            messages = ai.next(
-                messages,
-                "Make your own assumptions and state them explicitly before starting",
-                step_name=curr_fn(),
-            )
-            print()
-            return messages
-
-        user_input += (
-            "\n\n"
-            "Is anything else unclear? If yes, only answer in the form:\n"
-            "{remaining unclear areas} remaining questions.\n"
-            "{Next question}\n"
-            'If everything is sufficiently clear, only answer "Nothing more to clarify.".'
-        )
-
-    print()
     return messages
+
+    # messages: List[Message] = [ai.fsystem(dbs.preprompts["clarify"])]
+    # user_input = dbs.input["prompt"]
+    # while True:
+    #     messages = ai.next(messages, user_input, step_name=curr_fn())
+    #     msg = messages[-1].content.strip()
+
+    #     if msg == "Nothing more to clarify.":
+    #         break
+
+    #     if msg.lower().startswith("no"):
+    #         print("Nothing more to clarify.")
+    #         break
+
+    #     print()
+    #     user_input = input('(answer in text, or "c" to move on)\n')
+    #     print()
+
+    #     if not user_input or user_input == "c":
+    #         print("(letting gpt-engineer make its own assumptions)")
+    #         print()
+    #         messages = ai.next(
+    #             messages,
+    #             "Make your own assumptions and state them explicitly before starting",
+    #             step_name=curr_fn(),
+    #         )
+    #         print()
+    #         return messages
+
+    #     user_input += (
+    #         "\n\n"
+    #         "Is anything else unclear? If yes, only answer in the form:\n"
+    #         "{remaining unclear areas} remaining questions.\n"
+    #         "{Next question}\n"
+    #         'If everything is sufficiently clear, only answer "Nothing more to clarify.".'
+    #     )
+
+    # print()
+    # return messages
 
 
 def gen_spec(ai: AI, dbs: DBs) -> List[Message]:
@@ -390,6 +419,7 @@ def human_review(ai: AI, dbs: DBs):
 
 class Config(str, Enum):
     DEFAULT = "default"
+    GENERATE_CODE = "generate_code"
     BENCHMARK = "benchmark"
     SIMPLE = "simple"
     TDD = "tdd"
@@ -409,9 +439,10 @@ STEPS = {
     Config.DEFAULT: [
         clarify,
         gen_clarified_code,
-        gen_entrypoint,
-        execute_entrypoint,
-        human_review,
+        gen_entrypoint
+    ],
+    Config.GENERATE_CODE: [
+        gen_clarified_code,
     ],
     Config.BENCHMARK: [
         simple_gen,
@@ -440,11 +471,11 @@ STEPS = {
         human_review,
     ],
     Config.CLARIFY: [
-        clarify,
-        gen_clarified_code,
-        gen_entrypoint,
-        execute_entrypoint,
-        human_review,
+        clarify
+        # gen_clarified_code,
+        # gen_entrypoint,
+        # execute_entrypoint,
+        # human_review,
     ],
     Config.RESPEC: [
         gen_spec,

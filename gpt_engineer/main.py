@@ -28,9 +28,10 @@ def main(
     project_path: str = typer.Argument("projects/example", help="path"),
     model: str = typer.Argument("gpt-4", help="model id string"),
     temperature: float = 0.1,
-    steps_config: StepsConfig = typer.Option(
-        StepsConfig.DEFAULT, "--steps", "-s", help="decide which steps to run"
-    ),
+    steps_config: StepsConfig = StepsConfig.DEFAULT,
+    # steps_config: StepsConfig = typer.Option(
+    #     StepsConfig.DEFAULT, "--steps", "-s", help="decide which steps to run"
+    # ),
     improve_option: bool = typer.Option(
         False,
         "--improve",
@@ -45,6 +46,7 @@ def main(
             In that case, the given model is the deployment name chosen in the Azure AI Studio.""",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
+    body: dict = typer.Option({}, "--body", "-b"),
 ):
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
 
@@ -56,33 +58,27 @@ def main(
 
     load_env_if_needed()
 
+    azure_endpoint = os.getenv("OPENAI_API_BASE")
     ai = AI(
-        model_name=model,
+        model_name=os.getenv("OPENAI_API_DEPLOYMENT"),
         temperature=temperature,
         azure_endpoint=azure_endpoint,
     )
 
-    input_path = Path(project_path).absolute()
-    memory_path = input_path / "memory"
-    workspace_path = input_path / "workspace"
-    archive_path = input_path / "archive"
-
     dbs = DBs(
-        memory=DB(memory_path),
-        logs=DB(memory_path / "logs"),
-        input=DB(input_path),
-        workspace=DB(workspace_path),
-        preprompts=DB(
-            Path(__file__).parent / "preprompts"
-        ),  # Loads preprompts from the preprompts directory
-        archive=DB(archive_path),
+        memory=DB(data=body, identifier='memory'),
+        logs=DB(data=body, identifier='logs'),
+        preprompts=DB(data=body, identifier='preprompts'),
+        input=DB(data=body, identifier='input_prompt'),
+        workspace=DB(data=body, identifier='workspace'),
+        archive=DB(data=body, identifier='archive'),
     )
 
     if steps_config not in [
         StepsConfig.EXECUTE_ONLY,
         StepsConfig.USE_FEEDBACK,
         StepsConfig.EVALUATE,
-        StepsConfig.IMPROVE_CODE,
+        # StepsConfig.IMPROVE_CODE,
     ]:
         archive(dbs)
 
@@ -95,9 +91,6 @@ def main(
     for step in steps:
         messages = step(ai, dbs)
         dbs.logs[step.__name__] = AI.serialize_messages(messages)
-
-    if collect_consent():
-        collect_learnings(model, temperature, steps, dbs)
 
     dbs.logs["token_usage"] = ai.format_token_usage_log()
 
