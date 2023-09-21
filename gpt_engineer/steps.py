@@ -16,7 +16,7 @@ from gpt_engineer.chat_to_files import (
     to_files,
 )
 from gpt_engineer.db import DBs
-from gpt_engineer.file_selector import FILE_LIST_NAME, ask_for_files
+from gpt_engineer.file_selector import FILE_LIST_NAME, ask_for_files, ask_for_files_checkov
 from gpt_engineer.learning import human_review_input
 
 Message = Union[AIMessage, HumanMessage, SystemMessage]
@@ -327,6 +327,10 @@ def set_improve_filelist(ai: AI, dbs: DBs):
     ask_for_files(dbs.input)  # stores files as full paths.
     return []
 
+def set_improve_filelist_checkov(ai: AI, dbs: DBs):
+    """Sets the file list for files to work with in existing code mode."""
+    ask_for_files_checkov(dbs.input)  # stores files as full paths.
+    return []
 
 def assert_files_ready(ai: AI, dbs: DBs):
     """Checks that the required files are present for headless
@@ -368,6 +372,35 @@ def get_improve_prompt(ai: AI, dbs: DBs):
     input(confirm_str)
     return []
 
+def get_improve_prompt_checkov(ai: AI, dbs: DBs):
+    """
+    Asks the user what they would like to fix.
+    """
+
+    if not dbs.input.get("prompt"):
+        dbs.input["prompt"] = input(
+            "\nWhat do you need to improve with the selected files?\n"
+        )
+
+    confirm_str = "\n".join(
+        [
+            "-----------------------------",
+            "The following files will be used in the improvement process:",
+            f"{FILE_LIST_NAME}:",
+            str(dbs.input["file_list.txt"]),
+            "",
+            "The inserted prompt is the following:",
+            f"'{dbs.input['prompt']}'",
+            "-----------------------------",
+            "",
+            "You can change these files in your project before proceeding.",
+            "",
+            "Press enter to proceed with modifications.",
+            "",
+        ]
+    )
+    input(confirm_str)
+    return []
 
 def improve_existing_code(ai: AI, dbs: DBs):
     """
@@ -392,6 +425,28 @@ def improve_existing_code(ai: AI, dbs: DBs):
     overwrite_files(messages[-1].content.strip(), dbs)
     return messages
 
+def improve_existing_code_checkov(ai: AI, dbs: DBs):
+    """
+    After the file list and prompt have been aquired, this function is called
+    to sent the formatted prompt to the LLM.
+    """
+
+    files_info = get_code_strings(dbs.input)  # this only has file names not paths
+
+    messages = [
+        ai.fsystem(setup_sys_prompt_existing_code(dbs)),
+    ]
+    # Add files as input
+    for file_name, file_str in files_info.items():
+        code_input = format_file_to_input(file_name, file_str)
+        messages.append(ai.fuser(f"{code_input}"))
+
+    messages.append(ai.fuser(f"Request: {dbs.input['prompt']}"))
+
+    messages = ai.next(messages, step_name=curr_fn())
+
+    overwrite_files(messages[-1].content.strip(), dbs)
+    return messages
 
 def fix_code(ai: AI, dbs: DBs):
     messages = AI.deserialize_messages(dbs.logs[gen_code_after_unit_tests.__name__])
@@ -430,6 +485,7 @@ class Config(str, Enum):
     EVALUATE = "evaluate"
     USE_FEEDBACK = "use_feedback"
     IMPROVE_CODE = "improve_code"
+    IMPROVE_CODE_CHECKOV = "improve_code_checkov"
     EVAL_IMPROVE_CODE = "eval_improve_code"
     EVAL_NEW_CODE = "eval_new_code"
 
@@ -494,6 +550,11 @@ STEPS = {
         set_improve_filelist,
         get_improve_prompt,
         improve_existing_code,
+    ],
+    Config.IMPROVE_CODE_CHECKOV: [
+        set_improve_filelist_checkov,
+        get_improve_prompt_checkov,
+        improve_existing_code_checkov,
     ],
     Config.EVAL_IMPROVE_CODE: [assert_files_ready, improve_existing_code],
     Config.EVAL_NEW_CODE: [simple_gen],
