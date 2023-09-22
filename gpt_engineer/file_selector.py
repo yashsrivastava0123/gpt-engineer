@@ -287,24 +287,21 @@ def ask_for_files(db_input) -> None:
 
 
 def ask_for_files_checkov(db_input):
-    directory_path='/tmp/helloworld'
-    file_list = []
+    directory_path = '/tmp/tmp5tfpktte'
     file_dict = {}
-    # Check if the directory exists
+    
     if not os.path.exists(directory_path):
         raise ValueError(f"The directory '{directory_path}' does not exist.")
     
-    # Iterate over files in the directory
     for root, _, files in os.walk(directory_path):
         for file_name in files:
             file_path = os.path.join(root, file_name)
-            # Use relative file name as the key
             relative_file_name = os.path.relpath(file_path, directory_path)
             file_dict[relative_file_name] = file_path
     
-    file_list.append(file_dict)
-    db_input[FILE_LIST_NAME] = "\n".join(file_list)
-    return file_list
+    db_input['file_list.txt'] = "\n".join(file_dict.values())
+    return list(file_dict.values())
+
 
 
 def gui_file_selector() -> List[str]:

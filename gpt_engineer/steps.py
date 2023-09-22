@@ -372,35 +372,23 @@ def get_improve_prompt(ai: AI, dbs: DBs):
     input(confirm_str)
     return []
 
-def get_improve_prompt_checkov(ai: AI, dbs: DBs):
+def get_improve_prompt_checkov(ai: AI, dbs: DBs, checkovResults):
     """
-    Asks the user what they would like to fix.
+    Generates prompts for code improvement based on the checkovResults.
     """
 
-    if not dbs.input.get("prompt"):
-        dbs.input["prompt"] = input(
-            "\nWhat do you need to improve with the selected files?\n"
-        )
+    prompts = []
 
-    confirm_str = "\n".join(
-        [
-            "-----------------------------",
-            "The following files will be used in the improvement process:",
-            f"{FILE_LIST_NAME}:",
-            str(dbs.input["file_list.txt"]),
-            "",
-            "The inserted prompt is the following:",
-            f"'{dbs.input['prompt']}'",
-            "-----------------------------",
-            "",
-            "You can change these files in your project before proceeding.",
-            "",
-            "Press enter to proceed with modifications.",
-            "",
-        ]
-    )
-    input(confirm_str)
+    for result in checkovResults:
+        if result["check_result"]["result"] == "FAILED":
+            prompt = f"\nIssue in file: {result['file_abs_path']}\n"
+            prompt += "\n".join(result['code_block']) + "\n"
+
+            prompts.append(prompt)
+
+    dbs.input["prompts"] = prompts
     return []
+
 
 def improve_existing_code(ai: AI, dbs: DBs):
     """
@@ -436,16 +424,16 @@ def improve_existing_code_checkov(ai: AI, dbs: DBs):
     messages = [
         ai.fsystem(setup_sys_prompt_existing_code(dbs)),
     ]
-    # Add files as input
-    for file_name, file_str in files_info.items():
-        code_input = format_file_to_input(file_name, file_str)
-        messages.append(ai.fuser(f"{code_input}"))
-
-    messages.append(ai.fuser(f"Request: {dbs.input['prompt']}"))
+    prompts = dbs.input["prompts"]
+    
+    for prompt in prompts:
+        messages.append(ai.fuser(f"Request: {prompt}"))
 
     messages = ai.next(messages, step_name=curr_fn())
 
-    overwrite_files(messages[-1].content.strip(), dbs)
+    modified_code = messages[-1].content.strip()
+    overwrite_files(modified_code, dbs)
+
     return messages
 
 def fix_code(ai: AI, dbs: DBs):

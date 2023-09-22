@@ -35,6 +35,7 @@ class DBs:
     input: DB
     workspace: DB
     archive: DB
+    improve: DB
 
 
 def archive(dbs: DBs):

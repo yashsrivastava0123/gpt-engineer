@@ -110,15 +110,21 @@ def get_code_strings(input: DB) -> dict[str, str]:
         A dictionary mapping file names to their content.
     """
     files_paths = input[FILE_LIST_NAME].strip().split("\n")
-    files_dict = {}
-    for full_file_path in files_paths:
-        with open(full_file_path, "r") as file:
-            file_data = file.read()
-        if file_data:
-            file_name = os.path.relpath(full_file_path, input.path)
-            files_dict[file_name] = file_data
-    return files_dict
+    # files_dict = {}
+    # for full_file_path in files_paths:
+    #     with open(full_file_path, "r") as file:
+    #         file_data = file.read()
+    #     if file_data:
+    #         file_name = os.path.relpath(full_file_path, input.path)
+    #         files_dict[file_name] = file_data
+    # return files_dict
+    code_strings = []
 
+    for file_path in files_paths:
+        with open(file_path, 'r') as file:
+            code_strings.append(file.read())
+
+    return code_strings
 
 def format_file_to_input(file_name: str, file_content: str) -> str:
     """
