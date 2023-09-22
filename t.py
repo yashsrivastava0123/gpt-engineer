@@ -4,12 +4,13 @@ import openai
 from gpt_engineer.ai import AI
 from gpt_engineer.chat_to_files import get_code_strings, overwrite_files
 from gpt_engineer.db import DB, DBs
-from gpt_engineer.file_selector import ask_for_files_checkov
+from gpt_engineer.file_selector import FILE_LIST_NAME, ask_for_files_checkov
 from gpt_engineer.steps import curr_fn, setup_sys_prompt_existing_code
 
 def set_improve_filelist_checkov(ai: AI, dbs: DBs):
     """Sets the file list for files to work with in existing code mode."""
-    file_list = ask_for_files_checkov(dbs.input)  # stores files as full paths.
+    ask_for_files_checkov(dbs.input)  # stores files as full paths.
+    file_list = dbs.input[FILE_LIST_NAME]
     return file_list
 
 
@@ -30,21 +31,18 @@ def get_improve_prompt_checkov(ai: AI, dbs: DBs, checkovResults):
             prompt = f"Fix the code lines according to fix instructions: {fix_instructions}\n Code:\n{code_string}\n"
             prompts.append(prompt)
 
-    dbs.input["prompts"] = prompts
+    dbs.input["prompt"] = prompts
     return []
-
 
 def improve_existing_code_checkov(ai: AI, dbs: DBs):
     """
     After the file list and prompts have been acquired, this function is called
     to send the formatted prompts to the LLM and save the modified code.
     """
-    files_info = get_code_strings(dbs.input)  # this only has file names not paths
-    prompts = dbs.improve.get("prompts", [])  # Get the prompts from the 'improve' data store
 
-    messages = [
-        ai.fsystem(setup_sys_prompt_existing_code(dbs)),
-    ]
+    prompts = dbs.input["prompt"]
+    
+    messages = []
     
     for prompt in prompts:
         messages.append(ai.fuser(f"Request: {prompt}"))
@@ -53,9 +51,10 @@ def improve_existing_code_checkov(ai: AI, dbs: DBs):
 
     # Save the modified code
     modified_code = messages[-1].content.strip()
+    print("MODIFIED CODE", modified_code)
     overwrite_files(modified_code, dbs)
 
-    return messages
+    # return messages
 
 
 ai = AI(
@@ -73,10 +72,10 @@ dbs = DBs(
     input=DB(data=body, identifier='input_prompt'),
     workspace=DB(data=body, identifier='workspace'),
     archive=DB(data=body, identifier='archive'),
-    improve=DB(data=body, identifier='improve'),
     )
 
-file_list = set_improve_filelist_checkov(ai, dbs)
+# file_list = set_improve_filelist_checkov(ai, dbs)
+# print("File list", file_list)
 checkov_results = [
     {
         "check_id": "CKV_GCP_28",
@@ -607,6 +606,5 @@ checkov_results = [
         "category": "Unknown"
     }
 ]
-output = get_improve_prompt_checkov(ai, dbs, checkov_results)
-print("Output", output)
+get_improve_prompt_checkov(ai, dbs, checkov_results)
 improve_existing_code_checkov(ai, dbs)
