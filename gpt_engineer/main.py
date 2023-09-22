@@ -71,7 +71,8 @@ def main(
         preprompts=DB(data=body, identifier='preprompts'),
         input=DB(data=body, identifier='input_prompt'),
         workspace=DB(data=body, identifier='workspace'),
-        archive=DB(data=body, identifier='archive')
+        archive=DB(data=body, identifier='archive'),
+        improve=DB(data=body, identifier='improve'),
     )
 
     if steps_config not in [
