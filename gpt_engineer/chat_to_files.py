@@ -72,27 +72,67 @@ def to_files(chat: str, workspace: DB):
         workspace[file_name] = file_content
 
 
-def overwrite_files(chat, dbs):
+# def overwrite_files(chat, dbs):
+#     """
+#     Replace the AI files with the older local files.
+
+#     Parameters
+#     ----------
+#     chat : str
+#         The chat containing the AI files.
+#     dbs : DBs
+#         The database containing the workspace.
+#     """
+#     dbs.workspace["all_output.txt"] = chat  # TODO store this in memory db instead
+
+#     print("Overwriting files with local files")
+
+#     files = parse_chat(chat)
+#     for file_name, file_content in files:
+#         if file_name == "README.md":
+#             dbs.workspace[
+#                 "LAST_MODIFICATION_README.md"
+#             ] = file_content  # TODO store this in memory db instead
+#         else:
+#             dbs.workspace[file_name] = file_content
+
+
+def overwrite_files(chat, dbs, fileNames):
     """
-    Replace the AI files with the older local files.
+    Replace the AI files with the modified code and write it to the respective files.
 
     Parameters
     ----------
     chat : str
-        The chat containing the AI files.
+        The chat containing the AI-modified code.
     dbs : DBs
-        The database containing the workspace.
+        The database containing the workspace with file paths.
     """
-    dbs.workspace["all_output.txt"] = chat  # TODO store this in memory db instead
+    print("Overwriting files with modified code")
 
-    files = parse_chat(chat)
+    files = fileNames
+    print("files: ", files)
     for file_name, file_content in files:
         if file_name == "README.md":
+            # Special handling for README.md
             dbs.workspace[
                 "LAST_MODIFICATION_README.md"
             ] = file_content  # TODO store this in memory db instead
         else:
-            dbs.workspace[file_name] = file_content
+            # Check if the file name exists in the workspace
+            if file_name in dbs.workspace.data[dbs.workspace.identifier]:
+                # Retrieve the file path from the workspace data
+                file_path = dbs.workspace.data[dbs.workspace.identifier][file_name]
+                # Write the modified code to the respective file
+                with open(file_path, 'w') as file:
+                    file.write(file_content)
+            else:
+                print(f"Warning: File '{file_name}' not found in workspace.")
+
+    print("Files have been overwritten with modified code.")
+
+
+
 
 
 def get_code_strings(input: DB) -> dict[str, str]:

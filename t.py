@@ -18,7 +18,7 @@ def get_improve_prompt_checkov(ai: AI, dbs: DBs, checkovResults):
     """
     Generates prompts for code improvement based on the checkovResults.
     """
-    prompts = []
+    changeDicts = []
 
     for result in checkovResults:
         if result["check_result"]["result"] == "FAILED":
@@ -27,34 +27,36 @@ def get_improve_prompt_checkov(ai: AI, dbs: DBs, checkovResults):
 
             code_strings = [code_item[1] for code_item in code_block]  # Extract the code strings
             code_string = "\n".join(code_strings)
-
+            fileName = result.get("file_abs_path", "")
             prompt = f"Fix the code lines according to fix instructions: {fix_instructions}\n Code:\n{code_string}\n"
-            prompts.append(prompt)
+            changeDict = {
+                "fileName": fileName,
+                "prompt": prompt,
+                "lineRange": result.get("file_line_range", [])
+            }
+            changeDicts.append(changeDict)
 
-    dbs.input["prompt"] = prompts
+    dbs.input["prompt"] = changeDicts
     return []
 
-def improve_existing_code_checkov(ai: AI, dbs: DBs):
+def improve_existing_code_checkov(ai: AI, dbs: DBs, fileNames):
     """
     After the file list and prompts have been acquired, this function is called
     to send the formatted prompts to the LLM and save the modified code.
     """
 
-    prompts = dbs.input["prompt"]
+    changeDicts = dbs.input["prompt"]
     
-    messages = []
-    
-    for prompt in prompts:
-        messages.append(ai.fuser(f"Request: {prompt}"))
+    for changeDict in changeDicts:
+        messages = []
+        messages.append(ai.fuser(f"Request: {changeDict['prompt']}"))
+        messages = ai.next(messages, step_name=curr_fn())
 
-    messages = ai.next(messages, step_name=curr_fn())
+        modified_code = messages[-1].content.strip()
+        print("MODIFIED CODE", modified_code)
+        # overwrite_files(modified_code, dbs, fileNames)
 
-    # Save the modified code
-    modified_code = messages[-1].content.strip()
-    print("MODIFIED CODE", modified_code)
-    overwrite_files(modified_code, dbs)
-
-    # return messages
+    return messages
 
 
 ai = AI(
@@ -606,5 +608,5 @@ checkov_results = [
         "category": "Unknown"
     }
 ]
-get_improve_prompt_checkov(ai, dbs, checkov_results)
-improve_existing_code_checkov(ai, dbs)
+fileNames = get_improve_prompt_checkov(ai, dbs, checkov_results)
+improve_existing_code_checkov(ai, dbs, fileNames)
