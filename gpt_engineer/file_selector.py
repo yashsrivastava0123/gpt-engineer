@@ -1,8 +1,8 @@
 import os
 import re
 import sys
-import tkinter as tk
-import tkinter.filedialog as fd
+# import tkinter as tk
+# import tkinter.filedialog as fd
 
 from pathlib import Path
 from typing import List, Union
