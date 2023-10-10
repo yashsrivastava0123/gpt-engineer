@@ -71,10 +71,9 @@ def main(
     project_path: str = typer.Argument("projects/example", help="path"),
     model: str = typer.Argument("gpt-4", help="model id string"),
     temperature: float = 0.1,
-    steps_config: StepsConfig = StepsConfig.DEFAULT,
-    # steps_config: StepsConfig = typer.Option(
-    #     StepsConfig.DEFAULT, "--steps", "-s", help="decide which steps to run"
-    # ),
+    steps_config: StepsConfig = typer.Option(
+        StepsConfig.DEFAULT, "--steps", "-s", help="decide which steps to run"
+    ),
     improve_mode: bool = typer.Option(
         False,
         "--improve",
@@ -101,6 +100,7 @@ def main(
           Copies all original preprompts to the project's workspace if they don't exist there.""",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
+    body = []
 ):
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
 
@@ -146,7 +146,7 @@ def main(
         # workspace=DB(workspace_path),
         # preprompts=DB(preprompts_path(use_custom_preprompts, input_path)),
         # archive=DB(archive_path),
-        project_metadata=DB(project_metadata_path),
+        # project_metadata=DB(project_metadata_path),
     )
 
     if steps_config not in [
@@ -167,7 +167,7 @@ def main(
         messages = step(ai, dbs)
         dbs.logs[step.__name__] = AI.serialize_messages(messages)
 
-    print("Total api cost: $ ", ai.usage_cost())
+    # print("Total api cost: $ ", ai.usage_cost())
 
     # if collect_consent():
     #     collect_learnings(model, temperature, steps, dbs)
