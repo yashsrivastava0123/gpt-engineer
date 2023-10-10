@@ -1,10 +1,37 @@
+"""
+This module provides utilities to handle and process chat content, especially for extracting code blocks
+and managing them within a specified GPT Engineer project ("workspace"). It offers functionalities like parsing chat messages to
+retrieve code blocks, storing these blocks into a workspace, and overwriting workspace content based on
+new chat messages. Moreover, it aids in formatting and reading file content for an AI agent's input.
+
+Key Features:
+- Parse and extract code blocks from chat messages.
+- Store and overwrite files within a workspace based on chat content.
+- Format files to be used as inputs for AI agents.
+- Retrieve files and their content based on a provided list.
+
+Dependencies:
+- `os` and `pathlib`: For handling OS-level operations and path manipulations.
+- `re`: For regex-based parsing of chat content.
+- `gpt_engineer.core.db`: Database handling functionalities for the workspace.
+- `gpt_engineer.cli.file_selector`: Constants related to file selection.
+
+Functions:
+- parse_chat: Extracts code blocks from chat messages.
+- to_files: Parses a chat and adds the extracted files to a workspace.
+- overwrite_files: Parses a chat and overwrites files in the workspace.
+- get_code_strings: Reads a file list and returns filenames and their content.
+- format_file_to_input: Formats a file's content for input to an AI agent.
+"""
+
 import os
+from pathlib import Path
 import re
 
 from typing import List, Tuple
 
-from gpt_engineer.db import DB
-from gpt_engineer.file_selector import FILE_LIST_NAME
+from gpt_engineer.core.db import DB, DBs
+from gpt_engineer.cli.file_selector import FILE_LIST_NAME
 
 
 def parse_chat(chat) -> List[Tuple[str, str]]:
@@ -72,34 +99,9 @@ def to_files(chat: str, workspace: DB):
         workspace[file_name] = file_content
 
 
-# def overwrite_files(chat, dbs):
-#     """
-#     Replace the AI files with the older local files.
-
-#     Parameters
-#     ----------
-#     chat : str
-#         The chat containing the AI files.
-#     dbs : DBs
-#         The database containing the workspace.
-#     """
-#     dbs.workspace["all_output.txt"] = chat  # TODO store this in memory db instead
-
-#     print("Overwriting files with local files")
-
-#     files = parse_chat(chat)
-#     for file_name, file_content in files:
-#         if file_name == "README.md":
-#             dbs.workspace[
-#                 "LAST_MODIFICATION_README.md"
-#             ] = file_content  # TODO store this in memory db instead
-#         else:
-#             dbs.workspace[file_name] = file_content
-
-
-def overwrite_files(chat, dbs, fileNames):
+def overwrite_files(chat: str, dbs: DBs) -> None:
     """
-    Replace the AI files with the modified code and write it to the respective files.
+    Parse the chat and overwrite all files in the workspace.
 
     Parameters
     ----------
@@ -108,16 +110,13 @@ def overwrite_files(chat, dbs, fileNames):
     dbs : DBs
         The database containing the workspace with file paths.
     """
-    print("Overwriting files with modified code")
+    dbs.memory["all_output_overwrite.txt"] = chat
 
     files = fileNames
     print("files: ", files)
     for file_name, file_content in files:
         if file_name == "README.md":
-            # Special handling for README.md
-            dbs.workspace[
-                "LAST_MODIFICATION_README.md"
-            ] = file_content  # TODO store this in memory db instead
+            dbs.memory["LAST_MODIFICATION_README.md"] = file_content
         else:
             # Check if the file name exists in the workspace
             if file_name in dbs.workspace.data[dbs.workspace.identifier]:
@@ -135,7 +134,7 @@ def overwrite_files(chat, dbs, fileNames):
 
 
 
-def get_code_strings(input: DB) -> dict[str, str]:
+def get_code_strings(workspace: DB, metadata_db: DB) -> dict[str, str]:
     """
     Read file_list.txt and return file names and their content.
 
@@ -149,22 +148,34 @@ def get_code_strings(input: DB) -> dict[str, str]:
     dict[str, str]
         A dictionary mapping file names to their content.
     """
-    files_paths = input[FILE_LIST_NAME].strip().split("\n")
-    # files_dict = {}
-    # for full_file_path in files_paths:
-    #     with open(full_file_path, "r") as file:
-    #         file_data = file.read()
-    #     if file_data:
-    #         file_name = os.path.relpath(full_file_path, input.path)
-    #         files_dict[file_name] = file_data
-    # return files_dict
-    code_strings = []
 
-    for file_path in files_paths:
-        with open(file_path, 'r') as file:
-            code_strings.append(file.read())
+    def get_all_files_in_dir(directory):
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                yield os.path.join(root, file)
+        for dir in dirs:
+            yield from get_all_files_in_dir(os.path.join(root, dir))
 
-    return code_strings
+    files_paths = metadata_db[FILE_LIST_NAME].strip().split("\n")
+    files = []
+
+    for full_file_path in files_paths:
+        if os.path.isdir(full_file_path):
+            for file_path in get_all_files_in_dir(full_file_path):
+                files.append(file_path)
+        else:
+            files.append(full_file_path)
+
+    files_dict = {}
+    for path in files:
+        assert os.path.commonpath([full_file_path, workspace.path]) == str(
+            workspace.path
+        ), "Trying to edit files outside of the workspace"
+        file_name = os.path.relpath(path, workspace.path)
+        if file_name in workspace:
+            files_dict[file_name] = workspace[file_name]
+    return files_dict
+
 
 def format_file_to_input(file_name: str, file_content: str) -> str:
     """
